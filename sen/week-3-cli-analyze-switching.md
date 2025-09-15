@@ -91,3 +91,15 @@ Router(config)# no command
 - `do <command>` → run exec-level command from config mode
 - `show running-config` / `show startup-config` → display configs
 - `write` / `copy running-config startup-config` → save configs
+
+
+## Common Switch Configuration Mods
+
+| Prompt| Name Of Mode| Context Setting configure terminal |
+|---|---|---|
+|hostname(config)# | Global | None - first mode after `configure terminal`|
+|hostname(config-line)# | Line | line console 0; line vty 0 15 |
+|hostname(config-if)| Interface | interface type number |
+|hostname(vlan)#| VLAN |vlan number|
+
+<img src="https://github.com/matoanbach/networking/blob/main/pics/w3.1.1.png"/>
