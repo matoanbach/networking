@@ -94,3 +94,19 @@
 | /30           | 16384             | 2               |
 | /31           | 32768             | 0 (2)           |
 | /32           | 65536             | 0 (1)           |
+
+## Subnet/Hosts (Class A)
+
+### Subnetting Class A Networks
+- PC1 has an IP address of 10.217.182.223/11. Identify the following for PC1's subnet:
+    - Network address: `10.192.0.0/11`
+    - Broadcast address: `10.223.255.255/11`
+    - First usable address: `10.192.0.1/11`
+    - Last usable address: `10.233.255.254/11`
+    - Number of hosts (usable) addresses: `2,097,150` 
+
+## Variable-Length Subnet Mask
+- Until now, we have practiced subnetting used FLSM (Fixed-Length Subnet Masks).
+- This means that all of the subnets use the same prefix length (ie. subnetting a class C network into 4 subnets using `\24`)
+- VLSM (Variable-Length Subnet Masks) is the process of creating subnets of different sizes, to make your use of network addresses more efficient.
+- VLSM is more complicated than FLSM, but it's easy if you follow the steps correctly.
