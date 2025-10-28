@@ -88,3 +88,18 @@
 - To build routes, link state routes must do some math based on the topological information found in the LSDB.
 - All link state protocols use a math algorithm called Dijkstra Shortest Path First (SPF) to process the LSDB.
 - The algorithm analyzes the LSDB and builds the routes that the local route will add to the IP routing table.
+
+### Becoming OSPF Neighbors
+- OSPF neighbors are routers that both use OSPF, and both sit on the same data link.
+- OSPF routers introduce themselves by sending Hello messages.
+- Assuming the two neighbors have compatible OSPF parameters, the two will form a neighbor relationship.
+- The OSPF neighbor relationship lets OSPF know when a neighbor might not be a good option for routing packets.
+- The OSPF neighbor model allows new routers to by dynamically discovered.
+
+### Meeting Neighbors and Learning Their Router-ID
+- When OSPF exchanges `Hello` messsage they lust each router's `router-id` (RID).
+- This RID serves as each router's unique name or identifier for OSPF.
+- OSPF RIDs are `32-bit` numbers.
+- IOS chooses its OSPF RID based on an active interface IPv4 address.
+- The OSPF RID can also be directly configured.
+- As soon as a router has choosen its OSPF RID's and some interfaces come up. the router is ready to meet its OSPF neighbors.
