@@ -352,3 +352,118 @@ router ospf 1
     network 10.1.1.1 0.0.0.0 area 23
     network 10.1.1.1 0.0.0.0 area 4
 ```
+
+### OSPF Single-area 
+<img src="https://github.com/matoanbach/networking/blob/main/pics/w8.8.png"/>
+
+```bash
+configure terminal
+router ospf 1
+no network 10.0.0.0 0.255.255.255 area 0
+
+interface g0/0.1
+ip ospf 1 area 0
+
+interface g0/0.2
+ip ospf 1 area 0
+
+interface g0/0/0
+ip ospf 1 area 0
+
+interface g0/1/0
+ip ospf 1 area 0
+
+interface g0/2/0
+ip ospf area 0
+```
+
+## Additional OSPF Features
+### 1. OSPF Passive Interfaces
+- An OSPF interface configured as passive will do the following:
+    - Quit sending OSPF Hellos on the interface.
+    - Ignore received Hellos on the interface.
+    - Do not form neighbor relationshops over the interface.
+- Important: OSPF does not form neighbor relationships over interfaces configured as passive but does still advertise about the subnet connected to that interface.
+- To configure an interface as passive there are two options:
+    1. Addint the `passive-interface type number`command under router configuration mode.
+    2. Configuring interfaces as passive by default with the `passive-interface default` command under global configuration mode and using the `no passive-inteface type number` command to disable passive of specific interfaces.
+
+```bash
+# First, make each subinteface passive directly
+router ospf 1
+    passive-interface GigabitEthernet0/0.1
+    passive-interface GigabitEthernet0/0.2 
+
+# Or, change the default to passive, and make the other interfaces not be passive
+router ospf 1
+    passive-interface default
+    no passive-interface GigabitEthernet0/0/0
+    no passive-interface GigabitEthernet0/1/0
+    no passive-interface GigabitEthernet0/2/0
+```
+
+- verification: OSPF makes it interesting to figure out which interfaces are passive:
+    - The `show ip ospf interface brief` command lists all interfaces on which OSPF is enabled including passive interfaces.
+    - The `show ip ospf interface` command lists a single line that mentions that the interface is passive.
+
+```bash
+show ip ospf interface brief
+show ip ospf interface g0/0.1
+```
+
+### 2. OSPF Default Routes
+- The most classic case for using a routing protocol to advertise a default route has to do with an enterprise's connection to the Internet.
+- The enterprise engineer uses the following design goals:
+    - All routers learn specific routes for subnets inside the company; a default route is not needed when forwarding packets to these destinations.
+    - One router connects to the Internet, and it has a default route that points toward the Internet.
+    - All routes should dynamically learn a default route, used for all traffic going to the Internet, so that all packets destined to locations on the Internet go to the one router connected to the Internet.
+
+<img src="https://github.com/matoanbach/networking/blob/main/pics/w8.9.png"/>
+
+- R1 has a static default route with a next-hop address of the ISP router.
+- R1 uses the OSPF `default-information originate` command to advertise a default route using OSPF to B1 and B2.
+- R1 needs a default route, either defined as a static default route, learned from the ISP with DHCP or learned from the ISP with a routing protocol like eBGP.
+- The OSPF sub-command `default-information originate` then tells OSPF on R1 to advertise a default route when its own default route is working and to advertise the default route as down then its own defailt route fails.
+- The branch routes then place the learned OSPF default route into their routing tables.
+
+<img src="https://github.com/matoanbach/networking/blob/main/pics/w8.10.png"/>
+
+- R1 uses DHCP to learn its IP address on its G0/3/0 interface from the ISP.
+- R1 then creates a static default route with the ISP router's IP address of 192.0.2.1 as the next-hop address.
+
+### 3. OSPF Metrics (Cost)
+- Cisco routers allow three different ways to change the OSPF interface cost:
+    1. Directly, using the interface subcommand `ip ospf cost <x>`
+    2. Using the default calculation per interface, and changing the interface bandwidth setting, which changes the calculated value.
+    3. Using the default calculation per interface, and changing the OSPF reference bandwidth setting, which changes the calculated value.
+
+- IOS uses the `reference_bandwidth / interface_bandwidth` formula to choose an interface's cost.`
+    - Metric = 10^8 / BW = 100 Mbps / BW = reference_bandwidth / interface_bandwidth 
+    - With this formula the following sequence of logic happends:
+        1. A higher interface bandwidh - that is, a faster bandwidth - result in a lower number in the calculation
+        2. A lower number in the calculation gives the interface a lower cost.
+        3. An interface with a lower cost is more likely to be used by OSPF when calculating the best routes.
+
+#### OSPF Metrics (Cost) - Setting the cost directly example.
+```bash
+interface g0/0/0
+ip ospf cost 4
+
+interface g0/1/0
+ip ospf cost 5
+
+show ip ospf interface brief
+```
+
+| Interface | Interface Default Bandwidth (Kbps) | Formula (Kbps) | OSPF Cost |
+|-----------|------------------------------------|----------------|-----------|
+| Serial    | 1544 Kbps                          | 100000 / 1544  | 64        |
+| Ethernet  | 10000 Kbps                         | 100000 / 10000 | 10        |
+
+### 4. OSPF Load Balancing
+- Typically, when SPF calculates the metric of several routes, one route will have the lowest metric, so OSPF put it into the routing table.
+- When metrics tie for multiple routes to the same subnet, the router can put multiple equal-cost routes into the routing table.
+- This default can be altered with the `maximum-paths <number>` command.
+- Routes can load balance in two ways:
+    1. On a `per-packet basis`, where each new packet it forwarded out the next path in round robin. (Note: this is a poor choice because it causes the most overhead work on the router).
+    2. On a `per-destination basis`, where packets are forwarded using the same path for each specific IP destination (This is better choice)
