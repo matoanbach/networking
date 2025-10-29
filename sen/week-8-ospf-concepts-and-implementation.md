@@ -206,3 +206,149 @@
 - Routers require fewer CPU cycles to process the smaller per-area LSDB with the SDF algorithm, reducing CPU overhead and improving convergence time.
 - Changes in the network (for example, links failing and recovering) require SPF calculations only on routers connected to the area where the link changed state, reducing the number of routers that must rerun SPF.
 - Less information to be advertised between areas, reducing the bandwidth required to send LSAs.
+
+# Implementing OSPF
+## Implementing Single-Area OSPFv2
+- Step 1: Use the `router ospf <process-id>` global command to enter OSPF configuration mode for a particular OSPF process.
+- Step 2: Configure the OSPF router ID by doing the following:
+    - Use the `router-id <id-value>` router subcommand to define the router ID, or
+    - Use the `interface loopback <number>` global command, along with an ip address `address mask` command, to configure an IP addresss on a loopback interface (chooses the highest IP address of all working loopbacks), or
+    - Rely on an interface IP address (chooses the highest IP address of all working nonloopbacks).
+- Step 3: Use on or more `network <ip-address wildcard-mask> area <area-id>` router subcommands to enable OSPFv2 on many interfaces matched by the configured address and mask, enabling OSPF on the interface for the listed area.
+
+<img src="https://github.com/matoanbach/networking/blob/main/pics/w8.5.png"/>
+
+## OSPF Single-Area Configuration
+### Example 20-2 - OSPF Single-Area Configuration on R2 Using one network command
+```bash
+router ospf 1
+    network 10.0.0.0 0.255.255.255.255 area 0
+```
+- The `router ospf 1` global command puts the users into OSPF configuration mode and sets the OSPF `process-id` to 1.
+- This `process-id` just needs to be unique on the local router and be between 1 and 65535.
+- The OSPF `network` command tells the router to finds its local interfaces that match the first two parameters in the command.
+- Those interfacews then discover neighbors, create neighbor relationships and assign the interface to the area listed.
+
+### Wildcard Matching with the network Command
+- Rather than comparing the entire number in the network command to the entire IPv4 address on the interface, the router can compare a subset of the octets, based on the wildcard mask, as follows:
+    - `wildcard 0.0.0.0`: compare all four octest. In other words, the numbers must exactly match.
+    - `wildcard 0.0.0.255`: compare the first three octets only. Ignore the last octet when comparing the numbers.
+    - `wildcard 0.0.255.255`: compare the first two octets only. Ignore the last two octets when comparing the numbers.
+    - `wildcard 0.255.255.255`: compare the first octet only. Ignore the last three octets when comparing the numbers.
+    - `wildcard 255.255.255.255`: compare nothing; this wildcard mask means that all address will match the `network` command.
+
+## Verifying OSPF Operation
+
+<img src="https://github.com/matoanbach/networking/blob/main/pics/w8.6.png"/>
+
+### OSPF Neighbors on Router R1
+```bash
+show ip ospf neighbor
+```
+- **Interface**: This is the local router's interface connected to the neighbor. For example, the first neighbor in the list is reachable through R1's G0/0/0 interface.
+- **Address**: This is the neighbor's IP address on that link. Again, for this first neighbor, which R2, uses IP address 10.1.12.2.
+- **State**: While many possible states exist, for the details discussed in this chapter, FULL is the correct and fully working state in this case.
+- **Neighbor ID**: This is the router ID of the neighbor.
+
+### OSPF Database on Router R1
+```bash
+R1# show ip ospf database
+
+OSPF Router with ID (1.1.1.1) (Process ID 1)
+Router Link States (Area 0)
+Link ID ADV Router Age Seq# Checksum Link count
+1.1.1.1 1.1.1.1 431 0x8000008F 0x00DCCA 5
+2.2.2.2 2.2.2.2 1167 0x8000007F 0x009DA1 2
+3.3.3.3 3.3.3.3 441 0x80000005 0x002FB1 1
+4.4.4.4 4.4.4.4 530 0x80000004 0x007F39 2
+Net Link States (Area 0)
+Link ID ADV Router Age Seq# Checksum
+10.1.12.2 2.2.2.2 1167 0x8000007C 0x00BBD5
+10.1.13.3 3.3.3.3 453 0x80000001 0x00A161
+10.1.14.1 1.1.1.1 745 0x8000007B 0x004449
+10.1.23.3 3.3.3.3 8 0x80000001 0x00658F
+```
+- When OSPF is working correctly in the internetwork with a single-area design, all of the routers will have the same LSDB contents.
+
+### Example: Router R3 Configuration and the `show ip protocols` command
+- The best way to verify the configuration begings with the `show running-config` command, of course. However, the `shwo ip protocols` command repeats the details of the OSPFv2 configuration and does not require enable mode access.
+
+```bash
+# First, a reminder of R3's configuration per Example 20-3
+router ospf 1
+    network 10.1.13.3 0.0.0.0 area 0
+    network 10.1.23.3 0.0.0.0 area 0
+#
+# The output from router R3:
+R3# show ip protocols
+*** IP Routing is NSF aware ***
+Routing Protocol is "ospf 1"
+    Outgoing update filter list for all interfaces is not set
+    Incoming update filter list for all interfaces is not set
+Router ID 3.3.3.3
+    Number of areas in this router is 1. 1 normal 0 stub 0 nssa
+    Maximum path: 4
+Routing for Networks:
+    10.1.13.3 0.0.0.0 area 0
+    10.1.23.3 0.0.0.0 area 0
+Routing Information Sources:
+    Gateway Distance Last Update
+    1.1.1.1 110 02:05:26
+    4.4.4.4 110 02:05:26
+    2.2.2.2 110 01:51:16
+Distance: (default is 110)
+```
+
+### Example: Router R1 `show ip ospf interface brief` command
+
+- IOS interprets the network commands to choose interfaces on which to run OSPF, so it could be that IPS chooses a different set of interfaces than you predicted. To check the list of interfaces chosen by IOS, use the `show ip ospf interface brief` command, which lists all interfaces that have been enabled for OSPF processing.
+
+```bash
+R1# show ip ospf interface brief
+Interface PID Area IP Address/Mask Cost State Nbrs F/C
+Gi0/0/0 1 0 10.1.12.1/24 1 BDR 1/1
+Gi0/1/0 1 0 10.1.13.1/24 1 BDR 1/1
+Gi0/2/0 1 0 10.1.14.1/24 1 DR 1/1
+Gi0/0.2 1 0 10.1.2.1/24 1 DR 0/0
+Gi0/0.1 1 0 10.1.1.1/24 1 DR 0/0
+```
+
+### Configuring the OSPF Router ID
+- OSPF speaking routers must have a router-ID (RID) for proper operation.
+- By default, routers will choose an interface IP address to use as the RID.
+- Typically, engineers prefer to choose each router's RID.
+- A Cisco router uses the following process when the router reloads and brings up the OSPF process to find the RID.
+    1. If the `router-id <rid>` OSPF subcommand is configured, this value is used the RID. (it can be any number like 1.1.1.1 to 255.255.255.255)
+    2. If any loopback interfaces have an IP address configured, and the interface has an interface status of up, the router picks the highest numeric IP address among these loopback interfaces.
+    3. The router picks the highest numeric IP address from all other interfaces whose interface status code (first status code) is up. (In other words, an interface in up/down state will be included by OSPF when choosing its router ID.)
+
+#### Example: OSPF Router ID configuration Examples
+```bash
+! R1 Configuration first
+router ospf 1
+    router-id 1.1.1.1
+    network 10.1.0.0 0.0.255.255 area 0
+```
+
+```bash
+! R2 Configuration next
+!
+interface Loopback2
+ip address 2.2.2.2 255.255.255.255
+```
+- To verify what is the router id on R1:
+```bash
+R1# show ip ospf
+```
+
+#### Implementing Multiarea OSPF
+<img src="https://github.com/matoanbach/networking/blob/main/pics/w8.7.png"/>
+
+```bash
+router ospf 1
+    network 10.1.1.1 0.0.0.0 area 0
+    network 10.1.1.1 0.0.0.0 area 0
+    network 10.1.1.1 0.0.0.0 area 23
+    network 10.1.1.1 0.0.0.0 area 23
+    network 10.1.1.1 0.0.0.0 area 4
+```
