@@ -103,3 +103,106 @@
 - IOS chooses its OSPF RID based on an active interface IPv4 address.
 - The OSPF RID can also be directly configured.
 - As soon as a router has choosen its OSPF RID's and some interfaces come up. the router is ready to meet its OSPF neighbors.
+- Note:
+    - The default hello intervals are 10 seconds for the hello time, and 40 seconds for the dead time.
+    - To discover other OSPF-speaking routers, a router sends `multicast OSPF Hello packets` to each interface and hopes to receive OSPF `hello packets` from other routers connected to those interfaces.
+- The process:
+    - The Hello message follows the IP packet header, with IP protocol type 89.
+    - Hello packets are sent to multicast IP address 224.0.0.4, a multicast IP address intended for all OSPF-speaking routers.
+    - OSPF routers listen for packets sent to IP multicast address 224.0.0.5, in part hoping to receive Hello packets and learn about new neighbors.
+- The 2-way state is a particularly important OSPF state. At that point, the following major facts are true:
+    - The router received a Hello from the neighbor, with that router's own RID listed as being seen by the neighbor.
+    - The router has checked all the parameters in the Hello received from the neighbor, with no problems. The router is willing to become an OSPF neighbor.
+    - If both routers reach a 2-way state with each other, it means that both routers meet all OSPF configuration requirements to become neighbors. Effectively, at that point, they are neighbors and ready to exchange their LSDB with each other.
+
+### Fully Exchanging LSAs with Neighbors
+- After two routers decide to exchange databases, they do not simply send the contents of their entire database:
+    1. They tell each other a list of LSAs that are in their respective databases.
+    2. Each router checks to see which LSAs it already has.
+    3. Each router then requests only those LSAs that it does not know about yet.
+- OSPF messages that actually send the LSAs between neighbors are called `Link-State-Update` (LSU) packets.
+- Each LSU packet holds data structures called Link State Advertisements (LSA).
+- When finished, the routers reach a full state, meaning they have fully exchanged the contents of their LSDBs.
+
+### Maintaining Neighbors and the LSDB
+- Once two neighbors reach a full state, they have done all the initial work to exchange OSPF information.
+- Neighbors still have to do some small ongoing tasks to maintain their neighbor relationship:
+    - Routers monitor each neighbor relationship using Hello messages and two related timers: Hello Interval and Dead Interval.
+    - Routers send and expect to receive a Hello message from each neighbor based on the Hello interval
+    - If a neighbor is silent for the length of the Dead Interval, the router assumes the neighbor has failed.
+    - Routers must also be able to react when the topology changes.
+
+### OSPF Maintainance Task Summary
+- Maintain neighbor state by sending Hello messages based on the Hello interval, and listening for Hellos before the Dead Interval expires.
+- Flood any changed LSAs to each neighbor.
+- Reflood unchanged LSAs as their lifetime expires (default 30 minutes)
+
+## Designated Routers on Ethernet Links
+- Network types are:
+    1. Point-to-point (Ex. WAN link)
+    2. Point-to-multipoint (Ex. Broadcast)
+- On Ethernet Links, OSPF elects one of the routers on the same subnet to act as the `designated router` (DR)
+- The DR plays a key role in how the database exchange process works.
+- Note: BDR = Backup Designated Router (hot stand-by)
+- The database exchange process on an Ethernet link does not happen between every pair of routers on the same VLAN/subnet.
+- The database exchange happens between the DR and each of the other routers.
+- The `backup designated router` (BDR) watches the status of the DR and takes over for the DR if it fails.
+- The `DR and BDR both do full database exchanges with all other routers` on the LAN, they both reach a full state with all neighbors.
+
+### Stable OSPF Neighbor States and Their Meanings
+| Neighbor State | Term for Neighbor                          | Term for Relationship |
+|----------------|--------------------------------------------|-----------------------|
+| 2-way          | Neighbor                                   | Neighbor Relationship |
+| Full           | Adjacent Neighbor, Fully Adjacent Neighbor | Adjency               |
+
+### Calculating the Best Routes with SPF
+<img src="https://github.com/matoanbach/networking/blob/main/pics/w8.2.png"/>
+
+- Once SPF has identified a route, OSPF calculates the metric for a route as follows:
+    - The sum of the OSPF interface costs for all outgoing interfaces in the route.
+
+## OSPF Area Design 
+
+- Larger OSPFv2 networks suffer when using a single area design:
+    - A larger topology database requires more memory on each router.
+    - Processing the larger topology database with the SPF algorithm requires processing power that grows exponentially with the size of the topology database.
+    - A single interface status change, anywhere in the internetwork (up to down, or down to up), forces every router to run SPF again.
+- Solution:
+    - The solution is to take one large LSDB and break it into several smaller LSDBs by using OSPF area.
+    - With areas each link is placed into one area.
+    - SPF does it complicated math on the topology inside the area and that area's topology only.
+    - Generally, networks larger than a few dozen routers benefit from areas.
+
+- OSPF area design follows a couple of basic rules:
+    - Put all interfaces connected to the same subnet inside the same area.
+    - An area should be contiguous.
+    - Some routers may be internal to an area, with all interfaces assigned to that single area.
+    - Some routers may be Area Border Routers (ABR), because some interfaces connect to the backbone area, and some connect to nonbackbone areas.
+    - All nonbackbone areas must connect to the backbond area (area o) by having at least one ABR connected to both the backbone area and the nonbackbone area.
+
+<img src="https://github.com/matoanbach/networking/blob/main/pics/w8.2.png"/>
+
+| Term               | Description                                                                                                                           |
+|--------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| Area Border Router | An OSPF router with interfaces connected to the backbone area and to at least one other area                                          |
+| Backbone router    | A router connected to the backbone area (includes ABRs)                                                                               |
+| Internal router    | A router in one area (not the backbone area)                                                                                          |
+| Area               | A set of routers and links that shares the same detailed LSDB information, but not with routers in other areas, for better efficiency |
+| Backbone area      | A special OSPF area to which all other areas must connect - area 0                                                                    |
+| Intra-area route   | A route to a subnet inside the same area as the router                                                                                |
+| Interarea route    | A route to a subnet in an area of which the router is not a part                                                                      |
+
+### How Areas Reduce SPF Calculation Time
+- SPF spends most of its processing time working through all the topology details
+- Areas reduce this workload because the LSDB only lists those routers and links inside that area.
+- While the LSDB has less topology information, it still must have information about all subnets in all areas.
+- OSPF uses very brief summary information about the subnets to other areas.
+- These LSAs do not include topology information about the other areas.
+
+<img src="https://github.com/matoanbach/networking/blob/main/pics/w8.4.png"/>
+
+### OSPF Area Design Advantages
+- The smaller per-area LSDB requires less memory.
+- Routers require fewer CPU cycles to process the smaller per-area LSDB with the SDF algorithm, reducing CPU overhead and improving convergence time.
+- Changes in the network (for example, links failing and recovering) require SPF calculations only on routers connected to the area where the link changed state, reducing the number of routers that must rerun SPF.
+- Less information to be advertised between areas, reducing the bandwidth required to send LSAs.
